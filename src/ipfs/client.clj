@@ -1,11 +1,13 @@
 (ns ipfs.client
   (:refer-clojure :exclude [get cat])
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [camel-snake-kebab.core :refer [->kebab-case]]
             [org.httpkit.client :as client]
             [ipfs.tar :as tar]
-            [ipfs.util :as util]))
+            [ipfs.util :as util])
+  (:import [java.io ByteArrayInputStream]))
 
 
 (def DEFAULT_HOST "localhost")
@@ -64,19 +66,30 @@
         decoder)))
 
 
-(defn get
-  [multihash]
+(defn add
+  [start & {:keys [recursive pattern]
+            :or {recursive false
+                 pattern "*"}}]
+  (let [files (util/glob start recursive pattern)
+        tarfile (tar/files->tar files)]
+    (request "/add"
+             :multipart [{:name ""
+                          :content (.toByteArray tarfile)}]
+             :decoder :json
+             :method :put)))
+
+
+
+(defn get [multihash]
   (-> (request (format "/get/%s" multihash))
       (tar/untar-string)))
 
 
-(defn cat
-  [multihash]
+(defn cat [multihash]
   (request (format "/cat/%s" multihash)))
 
 
-(defn ls
-  [multihash]
+(defn ls [multihash]
   (request (format "/ls/%s" multihash) :decoder :json))
 
 
@@ -87,6 +100,33 @@
 (defn refs-local []
   (request "/refs/local" :decoder :json))
 
+
+(defn object-new
+  ([] (object-new nil))
+  ([template]
+   (if template
+     (request (format "/object/new/%s" template) :decoder :json)
+     (request "/object/new/" :decoder :json))))
+
+
+(defn object-data [multihash]
+  (request (format "/object/data/%s" multihash) :decoder :json))
+
+
+(defn object-links [multihash]
+  (request (format "/object/links/%s" multihash) :decoder :json))
+
+
+(defn object-get [multihash]
+  (request (format "/object/get/%s" multihash) :decoder :json))
+
+
+(defn object-put [data]
+  (request "/object/put"
+           :multipart [{:name ""
+                        :content data}]
+           :decoder :json
+           :method :put))
 
 (defn block-stat [multihash]
   (request (format "/block/stat/%s" multihash) :decoder :json))

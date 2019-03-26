@@ -1,6 +1,10 @@
 (ns ipfs.tar
-  (:import [org.apache.commons.compress.archivers.tar TarArchiveInputStream]
-           [java.io File FileOutputStream ByteArrayInputStream]))
+  (:require [clojure.java.io :as io])
+  (:import [org.apache.commons.compress.archivers.tar
+            TarArchiveInputStream
+            TarArchiveOutputStream
+            TarArchiveEntry]
+           [java.io File FileOutputStream ByteArrayInputStream ByteArrayOutputStream]))
 
 (defn untar-string
   "Untar a string and save to location."
@@ -25,3 +29,15 @@
                         (.write outstream buffer 0 len)
                         (recur (.read zis buffer))))))))
             (recur (.getNextEntry zis))))))))
+
+(defn files->tar
+  [files]
+  (let [bos (ByteArrayOutputStream.)
+        tarfile (TarArchiveOutputStream. bos)]
+    (doseq [file files]
+      (->> (TarArchiveEntry. file)
+           (.putArchiveEntry tarfile))
+      (io/copy file tarfile)
+      (.closeArchiveEntry tarfile))
+    (.close bos)
+    bos))
