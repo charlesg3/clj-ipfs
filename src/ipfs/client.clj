@@ -46,7 +46,11 @@
 (defn json-decoder
   [input-str]
   (->> (str/split input-str #"\n")
-       (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))))
+       (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))
+       ((fn [x]
+          (if (= (count x) 1)
+            (first x)
+            x)))))
 
 
 (defn request
