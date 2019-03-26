@@ -1,7 +1,6 @@
 (ns ipfs.client
   (:refer-clojure :exclude [get cat])
   (:require [clojure.data.json :as json]
-            [clojure.java.io :as io]
             [clojure.string :as str]
             [camel-snake-kebab.core :refer [->kebab-case]]
             [org.httpkit.client :as client]
