@@ -1,6 +1,9 @@
 (ns ipfs.client-test
   (:require [clojure.test :refer [deftest is]]
-            [ipfs.client :as c]))
+            [clojure.set :as set]
+            [ipfs.client :as c]
+            [ipfs.test-utils :as test-utils])
+  (:import [java.util UUID]))
 
 (def readme-multihash "QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB")
 
@@ -18,3 +21,19 @@
     (is (= size (count data)))
     (is (= data (c/block-get block-key)))
     (is (= (count data) (:size (c/block-stat block-key))))))
+
+(deftest add-get-test
+  (let [random-dir (str (UUID/randomUUID))
+        test-data-dir "test/data/fake_dir"
+        upload-result (c/add test-data-dir :recursive true)
+        directory-hash (->> upload-result
+                            (filter #(= (:name %) "test"))
+                            (first)
+                            :hash)
+        ;; Download files we just uploaded into a separate directory
+        _ (c/get directory-hash :output-directory random-dir)
+        source-files (test-utils/dir->file-set "test/data/fake_dir")
+        dest-files (test-utils/dir->file-set (format "%s/%s/data/fake_dir" random-dir directory-hash))]
+    (is (empty? (set/difference source-files dest-files)))
+    (is (empty? (set/difference dest-files source-files)))
+    (test-utils/delete-recursively random-dir)))

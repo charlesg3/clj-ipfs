@@ -1,6 +1,7 @@
 (ns ipfs.client
   (:refer-clojure :exclude [get cat])
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [camel-snake-kebab.core :refer [->kebab-case]]
             [org.httpkit.client :as client]
@@ -42,6 +43,12 @@
                        :maximum-version VERSION_MAXIMUM})))))
 
 
+(defn json-decoder
+  [input-str]
+  (->> (str/split input-str #"\n")
+       (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))))
+
+
 (defn request
   [path & {:keys [decoder method data params]
            :or {decoder :identity
@@ -49,7 +56,7 @@
            :as opts}]
   (let [decoder (condp = decoder
                   :identity identity
-                  :json #(json/read-str % :key-fn (comp keyword ->kebab-case)))
+                  :json json-decoder)
         method (condp = method
                  :get client/get
                  :put client/put
@@ -66,22 +73,31 @@
 
 
 (defn add
-  [start & {:keys [recursive pattern]
+  [start & {:keys [recursive pattern wrap-with-directory]
             :or {recursive false
                  pattern "*"}}]
-  (let [files (util/glob start recursive pattern)
-        tarfile (tar/files->tar files)]
+  (let [files (->> (util/glob start recursive pattern)
+                   (mapv (fn [f]
+                           (if (.isDirectory f)
+                             {:name "files"
+                              :content-type "application/x-directory"
+                              :content ""
+                              :filename (.getPath f)}
+                             {:name "files"
+                              :filename (.getPath f)
+                              :content f}))))]
     (request "/add"
-             :multipart [{:name ""
-                          :content (.toByteArray tarfile)}]
+             :multipart files
              :decoder :json
-             :method :put)))
+             :params {:wrap-with-directory (if wrap-with-directory "True" "False")}
+             :method :post)))
 
 
-
-(defn get [multihash]
+(defn get [multihash & {:keys [output-directory]
+                        :or {output-directory "."}}]
+  (io/make-parents output-directory)
   (-> (request (format "/get/%s" multihash))
-      (tar/untar-string)))
+      (tar/untar-string :output-directory output-directory)))
 
 
 (defn cat [multihash]
@@ -151,3 +167,23 @@
   (-> (version)
       (:version)
       (assert-version)))
+
+
+(defn id
+  ([] (id nil))
+  ([peer]
+   (request (if peer (format "/id/%s" peer) (format "/id")) :decoder :json)))
+
+
+(defn bootstrap-list
+  []
+  (request "/bootstrap" :decoder :json))
+
+
+(def bootstrap bootstrap-list)
+
+
+(defn bootstrap-list
+  []
+  (request "/bootstrap" :decoder :json))
+
