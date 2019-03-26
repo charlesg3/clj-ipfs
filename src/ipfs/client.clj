@@ -42,13 +42,23 @@
 
 
 (defn request
-  [path & {:keys [decoder]
-           :or {decoder :identity}}]
+  [path & {:keys [decoder method data params]
+           :or {decoder :identity
+                method :get}
+           :as opts}]
   (let [decoder (condp = decoder
                   :identity identity
-                  :json #(json/read-str % :key-fn (comp keyword ->kebab-case)))]
+                  :json #(json/read-str % :key-fn (comp keyword ->kebab-case)))
+        method (condp = method
+                 :get client/get
+                 :put client/put
+                 :post client/post)
+        opts (merge (dissoc opts :decoder :method :data :params)
+                    (if data {:body data})
+                    (if params {:query-params params}))]
+
     (-> (format "http://%s:%s/%s/%s" DEFAULT_HOST DEFAULT_PORT DEFAULT_BASE path)
-        (client/get)
+        (method opts)
         (deref)
         (:body)
         decoder)))
@@ -68,6 +78,30 @@
 (defn ls
   [multihash]
   (request (format "/ls/%s" multihash) :decoder :json))
+
+
+(defn refs [multihash]
+  (request (format "/refs/%s" multihash) :decoder :json))
+
+
+(defn refs-local []
+  (request "/refs/local" :decoder :json))
+
+
+(defn block-stat [multihash]
+  (request (format "/block/stat/%s" multihash) :decoder :json))
+
+
+(defn block-get [multihash]
+  (request (format "/block/get/%s" multihash)))
+
+
+(defn block-put [data]
+  (request (format "/block/put")
+           :multipart [{:name ""
+                        :content data}]
+           :decoder :json
+           :method :put))
 
 (defn version
   []

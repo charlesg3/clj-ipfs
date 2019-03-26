@@ -11,3 +11,10 @@
 (deftest readme-test
   (let [r (c/cat readme-multihash)]
     (is (string? r))))
+
+(deftest block-test
+  (let [data "adsf"
+        {block-key :key :keys [size]} (c/block-put data)]
+    (is (= size (count data)))
+    (is (= data (c/block-get block-key)))
+    (is (= (count data) (:size (c/block-stat block-key))))))
