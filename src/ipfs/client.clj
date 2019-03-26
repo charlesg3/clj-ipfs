@@ -45,12 +45,13 @@
 
 (defn json-decoder
   [input-str]
-  (->> (str/split input-str #"\n")
-       (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))
-       ((fn [x]
-          (if (= (count x) 1)
-            (first x)
-            x)))))
+  (if (and input-str (not= input-str ""))
+    (->> (str/split input-str #"\n")
+         (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))
+         ((fn [x]
+            (if (= (count x) 1)
+              (first x)
+              x))))))
 
 
 (defn request
@@ -67,13 +68,24 @@
                  :post client/post)
         opts (merge (dissoc opts :decoder :method :data :params)
                     (if data {:body data})
-                    (if params {:query-params params}))]
-
-    (-> (format "http://%s:%s/%s/%s" DEFAULT_HOST DEFAULT_PORT DEFAULT_BASE path)
+                    (if params {:query-params params}))
+        url (format "http://%s:%s/%s/%s" DEFAULT_HOST DEFAULT_PORT DEFAULT_BASE path)
+        cr #'client/coerce-req]
+    ;(println "opts: " opts)
+    ;(println (cr (merge {:method :get
+    ;                     :url url}
+    ;                    opts)))
+    (try
+    (-> url
         (method opts)
         (deref)
-        (:body)
-        decoder)))
+        ((fn [x]
+           (if (= (:status x) 200)
+             (-> x :body decoder)
+             (throw (ex-info "Request Error" x))))))
+    (catch Throwable e
+      (println "Error:")
+      (println e)))))
 
 
 (defn add
@@ -90,7 +102,7 @@
                              {:name "files"
                               :filename (.getPath f)
                               :content f}))))]
-    (request "/add"
+    (request "add"
              :multipart files
              :decoder :json
              :params {:wrap-with-directory (if wrap-with-directory "True" "False")}
@@ -100,24 +112,24 @@
 (defn get [multihash & {:keys [output-directory]
                         :or {output-directory "."}}]
   (io/make-parents output-directory)
-  (-> (request (format "/get/%s" multihash))
+  (-> (request (format "get/%s" multihash))
       (tar/untar-string :output-directory output-directory)))
 
 
 (defn cat [multihash]
-  (request (format "/cat/%s" multihash)))
+  (request (format "cat/%s" multihash)))
 
 
 (defn ls [multihash]
-  (request (format "/ls/%s" multihash) :decoder :json))
+  (request (format "ls/%s" multihash) :decoder :json))
 
 
 (defn refs [multihash]
-  (request (format "/refs/%s" multihash) :decoder :json))
+  (request (format "refs/%s" multihash) :decoder :json))
 
 
 (defn refs-local []
-  (request "/refs/local" :decoder :json))
+  (request "refs/local" :decoder :json))
 
 
 (defn object-new
@@ -125,38 +137,38 @@
   ([template]
    (if template
      (request (format "/object/new/%s" template) :decoder :json)
-     (request "/object/new/" :decoder :json))))
+     (request "object/new/" :decoder :json))))
 
 
 (defn object-data [multihash]
-  (request (format "/object/data/%s" multihash) :decoder :json))
+  (request (format "object/data/%s" multihash) :decoder :json))
 
 
 (defn object-links [multihash]
-  (request (format "/object/links/%s" multihash) :decoder :json))
+  (request (format "object/links/%s" multihash) :decoder :json))
 
 
 (defn object-get [multihash]
-  (request (format "/object/get/%s" multihash) :decoder :json))
+  (request (format "object/get/%s" multihash) :decoder :json))
 
 
 (defn object-put [data]
-  (request "/object/put"
+  (request "object/put"
            :multipart [{:name ""
                         :content data}]
            :decoder :json
            :method :put))
 
 (defn block-stat [multihash]
-  (request (format "/block/stat/%s" multihash) :decoder :json))
+  (request (format "block/stat/%s" multihash) :decoder :json))
 
 
 (defn block-get [multihash]
-  (request (format "/block/get/%s" multihash)))
+  (request (format "block/get/%s" multihash)))
 
 
 (defn block-put [data]
-  (request (format "/block/put")
+  (request "block/put"
            :multipart [{:name ""
                         :content data}]
            :decoder :json
@@ -164,13 +176,62 @@
 
 (defn version
   []
-  (request "/version" :decoder :json))
+  (request "version" :decoder :json))
 
 (defn check-version
   []
   (-> (version)
       (:version)
       (assert-version)))
+
+
+(defn files-cp [source dest]
+  (request "files/cp" :decoder :json :params {:arg [source dest]}))
+
+
+(defn files-ls [path]
+  (request "files/ls" :decoder :json :params {:arg path}))
+
+
+(defn files-mkdir [path]
+  (request "files/mkdir" :decoder :json :params {:arg path}))
+
+
+(defn files-stat [path]
+  (request "files/stat" :decoder :json :params {:arg path}))
+
+
+(defn files-rm [path]
+  (request "files/rm" :decoder :json :params {:arg path}))
+
+
+(defn files-read [path & {:keys [offset count]
+                          :or {offset 0}}]
+  (request (format "files/read")
+           :params (merge {:arg path
+                           :offset offset}
+                          (if count {:count count}))))
+
+
+(defn files-write [path data & {:keys [create truncate offset count]
+                                :or {create false
+                                     truncate false
+                                     offset 0}}]
+  (request "files/write"
+           :multipart [{:name ""
+                        :content data}]
+           :method :put
+           :params (merge {:arg path
+                           :offset offset
+                           :create (if create "True" "False")
+                           :truncate (if truncate "True" "False")}
+                          (if count {:count count}))))
+
+
+(defn files-mv [source dest]
+  (request "files/mv"
+           :decoder :json
+           :params {:arg [source dest]}))
 
 
 (defn id

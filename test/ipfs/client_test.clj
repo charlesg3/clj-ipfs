@@ -47,3 +47,20 @@
     (is (empty? (set/difference source-files dest-files)))
     (is (empty? (set/difference dest-files source-files)))
     (test-utils/delete-recursively random-dir)))
+
+(deftest files-api-test
+  (let [random-dir (str "/" (UUID/randomUUID))
+        file1-path (str random-dir "/file1")
+        file2-path (str random-dir "/file2")
+        test-data "test-data"]
+    (c/files-mkdir random-dir)
+    (c/files-write file1-path test-data :create true)
+    (c/files-cp file1-path file2-path)
+    (is (= (c/files-read file1-path) test-data))
+    (is (= (c/files-read file2-path) test-data))
+    (is (= 2 (count (:entries (c/files-ls random-dir)))))
+    (c/files-rm file1-path)
+    (is (= 1 (count (:entries (c/files-ls random-dir)))))
+    (c/files-mv file2-path file1-path)
+    (is (= 1 (count (:entries (c/files-ls random-dir)))))
+    (is (= (:size (c/files-stat file1-path)) (count test-data)))))
