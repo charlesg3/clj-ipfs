@@ -1,4 +1,4 @@
-(ns ipfs.untar
+(ns ipfs.tar
   (:import [org.apache.commons.compress.archivers.tar TarArchiveInputStream]
            [java.io File FileOutputStream ByteArrayInputStream]))
 
