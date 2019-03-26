@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [get cat])
   (:require [clojure.data.json :as json]
             [camel-snake-kebab.core :refer [->kebab-case]]
-            [org.httpkit.client :as client]))
+            [org.httpkit.client :as client]
+            [ipfs.untar :as untar]))
 
 
 (def DEFAULT_HOST "localhost")
@@ -25,7 +26,8 @@
 
 (defn get
   [multihash]
-  (request (format "/get/%s" multihash)))
+  (-> (request (format "/get/%s" multihash))
+      (untar/untar-string)))
 
 
 (defn cat
