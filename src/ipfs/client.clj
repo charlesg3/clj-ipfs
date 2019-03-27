@@ -1,5 +1,5 @@
 (ns ipfs.client
-  (:refer-clojure :exclude [get cat])
+  (:refer-clojure :exclude [get cat resolve])
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -43,7 +43,7 @@
                        :maximum-version VERSION_MAXIMUM})))))
 
 
-(defn json-decoder
+(defn- json-decoder
   [input-str]
   (if (and input-str (not= input-str ""))
     (->> (str/split input-str #"\n")
@@ -54,9 +54,9 @@
               x))))))
 
 
-(defn request
+(defn- request
   [path & {:keys [decoder method data params]
-           :or {decoder :identity
+           :or {decoder :json
                 method :get}
            :as opts}]
   (let [decoder (condp = decoder
@@ -104,7 +104,6 @@
                               :content f}))))]
     (request "add"
              :multipart files
-             :decoder :json
              :params {:wrap-with-directory (if wrap-with-directory "True" "False")}
              :method :post)))
 
@@ -112,71 +111,214 @@
 (defn get [multihash & {:keys [output-directory]
                         :or {output-directory "."}}]
   (io/make-parents output-directory)
-  (-> (request (format "get/%s" multihash))
+  (-> (request (format "get/%s" multihash) :decoder :identity)
       (tar/untar-string :output-directory output-directory)))
 
 
 (defn cat [multihash]
-  (request (format "cat/%s" multihash)))
+  (request (format "cat/%s" multihash) :decoder :identity))
 
 
 (defn ls [multihash]
-  (request (format "ls/%s" multihash) :decoder :json))
+  (request (format "ls/%s" multihash)))
 
 
 (defn refs [multihash]
-  (request (format "refs/%s" multihash) :decoder :json))
+  (request (format "refs/%s" multihash)))
 
 
 (defn refs-local []
-  (request "refs/local" :decoder :json))
+  (request "refs/local"))
 
-
-(defn object-new
-  ([] (object-new nil))
-  ([template]
-   (if template
-     (request (format "/object/new/%s" template) :decoder :json)
-     (request "object/new/" :decoder :json))))
-
-
-(defn object-data [multihash]
-  (request (format "object/data/%s" multihash) :decoder :json))
-
-
-(defn object-links [multihash]
-  (request (format "object/links/%s" multihash) :decoder :json))
-
-
-(defn object-get [multihash]
-  (request (format "object/get/%s" multihash) :decoder :json))
-
-
-(defn object-put [data]
-  (request "object/put"
-           :multipart [{:name ""
-                        :content data}]
-           :decoder :json
-           :method :put))
 
 (defn block-stat [multihash]
-  (request (format "block/stat/%s" multihash) :decoder :json))
+  (request (format "block/stat/%s" multihash)))
 
 
 (defn block-get [multihash]
-  (request (format "block/get/%s" multihash)))
+  (request (format "block/get/%s" multihash) :decoder :identity))
 
 
 (defn block-put [data]
   (request "block/put"
            :multipart [{:name ""
                         :content data}]
-           :decoder :json
            :method :put))
 
-(defn version
-  []
-  (request "version" :decoder :json))
+(defn bitswap-wantlist
+  ([] (bitswap-wantlist nil))
+  ([peer]
+   (if peer
+     (request (format "bitswap/wantlist/%s" peer))
+     (request "bitswap/wantlist"))))
+
+
+(defn bitswap-stat []
+  (request "bitswap/stat"))
+
+
+(defn bitswap-unwant [_key]
+  (request (format "bitswap/unwant/%s" _key)))
+
+
+(defn object-data [multihash]
+  (request (format "object/data/%s" multihash) :decoder :identity))
+
+
+(defn object-new
+  ([] (object-new nil))
+  ([template]
+   (if template
+     (request (format "/object/new/%s" template))
+     (request "object/new/"))))
+
+
+(defn object-links [multihash]
+  (request (format "object/links/%s" multihash)))
+
+
+(defn object-get [multihash]
+  (request (format "object/get/%s" multihash :decoder :identity)))
+
+
+(defn object-put [data]
+  (request "object/put"
+           :multipart [{:name ""
+                        :content data}]
+           :method :put))
+
+(defn object-stat [multihash]
+  (request (format "object/stat/%s" multihash)))
+
+
+(defn object-patch-append-data [multihash new-data]
+  (request (format "object/patch/append-data/" multihash)
+           :multipart [{:name ""
+                        :content new-data}]
+           :method :put))
+
+
+(defn object-patch-add-link [root name ref & {:keys [create]
+                                              :or {create false}}]
+  (request (format "object/patch/add-link")
+           :params {:arg [root name ref]
+                    :create (if create "True" "False")}))
+
+
+(defn object-patch-rm-link [root link]
+  (request (format "object/patch/rm-link")
+           :params {:arg [root link]}))
+
+
+(defn object-patch-set-data [root data]
+  (request (format "object/patch/set-data")
+           :params {:arg [root]}
+           :multipart [{:name ""
+                        :content data}]
+           :method :put))
+
+
+(defn resolve [name & {:keys [recursive]
+                       :or {recursive false}}]
+  (request "files/ls" :params {:arg name
+                               :recursive (if recursive "True" "False")}))
+
+
+(defn key-list []
+  (request "key/list"))
+
+
+(defn key-gen [key-name & {:keys [size type]
+                            :or {size 2048
+                                 type "rsa"}}]
+  (request "key/gen"
+           :params {:arg key-name
+                    :type type
+                    :size size}))
+
+
+(defn key-rm [key-name & key-names]
+  (request "key/rm"
+           :params {:arg (concat [key-name] key-names)}))
+
+
+(defn key-rename [key-name new-key-name]
+  (request "key/rename"
+           :params {:arg [key-name new-key-name]}))
+
+
+(defn name-publish [ipfs-path & {:keys [resolve lifetime ttl key]
+                                 :or {resolve true
+                                      lifetime "24h"
+                                      ttl nil
+                                      key nil}}]
+  (request "name/publish"
+           :params (merge {:arg ipfs-path
+                           :lifetime lifetime
+                           :resolve (if resolve "True" "False")}
+                          (if key {:key key})
+                          (if ttl {:ttl ttl}))))
+
+
+(defn name-resolve [& {:keys [name recursive nocache]
+                       :or {name nil
+                            recursive false
+                            nocache false}}]
+  (request "name/resolve"
+           :params (merge {:recursive (if recursive "True" "False")
+                           :nocache (if nocache "True" "False")}
+                          (if name {:arg name}))))
+
+
+(defn dns [domain-name & {:keys [recursive]
+                          :or {recursive false}}]
+  (request "dns" :params {:arg domain-name
+                          :recusrive (if recursive "True" "False")}))
+
+
+(defn pin-add [path & {:keys [recursive extra-paths]}]
+  (request "pin/add" :params {:arg (concat [path] extra-paths)
+                              :recusrive (if recursive "True" "False")}))
+
+
+(defn pin-rm [path & {:keys [recursive extra-paths]}]
+  (request "pin/rm" :params {:arg (concat [path] extra-paths)
+                             :recusrive (if recursive "True" "False")}))
+
+
+(defn pin-ls [& {:keys [type]
+                 :or {type "all"}}]
+  (request "pin/ls" :params {:type type}))
+
+
+(defn pin-update [from-path to-path & {:keys [unpin]}]
+  (request "pin/rm" :params (merge {:arg [from-path to-path]}
+                                   (if-not (nil? unpin)
+                                     {:unpin (if unpin "True" "False")}))))
+
+
+(defn pin-verify [path & {:keys [verbose extra-paths]}]
+  (request "pin/rm" :params {:arg (concat [path] extra-paths)
+                             :verbose (if verbose "True" "False")}))
+
+
+(defn repo-gc []
+  (request "/repo/gc"))
+
+
+(defn repo-stat []
+  (request "/repo/stat"))
+
+
+(defn id
+  ([] (id nil))
+  ([peer]
+   (request (if peer (format "/id/%s" peer) (format "/id")))))
+
+
+(defn version []
+  (request "version"))
+
 
 (defn check-version
   []
@@ -184,25 +326,24 @@
       (:version)
       (assert-version)))
 
+(defn files-ls [path]
+  (request "files/ls" :params {:arg path}))
+
 
 (defn files-cp [source dest]
-  (request "files/cp" :decoder :json :params {:arg [source dest]}))
-
-
-(defn files-ls [path]
-  (request "files/ls" :decoder :json :params {:arg path}))
+  (request "files/cp" :params {:arg [source dest]}))
 
 
 (defn files-mkdir [path]
-  (request "files/mkdir" :decoder :json :params {:arg path}))
+  (request "files/mkdir" :params {:arg path}))
 
 
 (defn files-stat [path]
-  (request "files/stat" :decoder :json :params {:arg path}))
+  (request "files/stat" :params {:arg path}))
 
 
 (defn files-rm [path]
-  (request "files/rm" :decoder :json :params {:arg path}))
+  (request "files/rm" :params {:arg path}))
 
 
 (defn files-read [path & {:keys [offset count]
@@ -210,7 +351,8 @@
   (request (format "files/read")
            :params (merge {:arg path
                            :offset offset}
-                          (if count {:count count}))))
+                          (if count {:count count}))
+           :decoder :identity))
 
 
 (defn files-write [path data & {:keys [create truncate offset count]
@@ -230,25 +372,27 @@
 
 (defn files-mv [source dest]
   (request "files/mv"
-           :decoder :json
            :params {:arg [source dest]}))
 
 
-(defn id
-  ([] (id nil))
-  ([peer]
-   (request (if peer (format "/id/%s" peer) (format "/id")) :decoder :json)))
+
 
 
 (defn bootstrap-list
   []
-  (request "/bootstrap" :decoder :json))
+  (request "/bootstrap"))
 
 
 (def bootstrap bootstrap-list)
 
 
-(defn bootstrap-list
-  []
-  (request "/bootstrap" :decoder :json))
+(defn bootstrap-add [peer & peers]
+  (request "/bootstrap/add" :params {:arg (concat [peer] peers)}))
+
+
+(defn bootstrap-rm [peer & peers]
+  (request "/bootstrap/rm" :params {:arg (concat [peer] peers)}))
+
+
+
 
