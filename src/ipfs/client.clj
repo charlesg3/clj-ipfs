@@ -45,13 +45,17 @@
 
 (defn- json-decoder
   [input-str]
-  (if (and input-str (not= input-str ""))
-    (->> (str/split input-str #"\n")
-         (mapv #(json/read-str % :key-fn (comp keyword ->kebab-case)))
-         ((fn [x]
-            (if (= (count x) 1)
-              (first x)
-              x))))))
+  (let [key-fn (fn [k]
+                (if-not (str/starts-with? k "Qm")
+                  (-> k ->kebab-case keyword)
+                  k))]
+    (if (and input-str (not= input-str ""))
+      (->> (str/split input-str #"\n")
+           (mapv #(json/read-str % :key-fn key-fn))
+           ((fn [x]
+              (if (= (count x) 1)
+                (first x)
+                x)))))))
 
 
 (defn- request
@@ -69,12 +73,7 @@
         opts (merge (dissoc opts :decoder :method :data :params)
                     (if data {:body data})
                     (if params {:query-params params}))
-        url (format "http://%s:%s/%s/%s" DEFAULT_HOST DEFAULT_PORT DEFAULT_BASE path)
-        cr #'client/coerce-req]
-    ;(println "opts: " opts)
-    ;(println (cr (merge {:method :get
-    ;                     :url url}
-    ;                    opts)))
+        url (format "http://%s:%s/%s/%s" DEFAULT_HOST DEFAULT_PORT DEFAULT_BASE path)]
     (try
     (-> url
         (method opts)
@@ -82,7 +81,7 @@
         ((fn [x]
            (if (= (:status x) 200)
              (-> x :body decoder)
-             (throw (ex-info "Request Error" x))))))
+             (-> x :body json-decoder)))))
     (catch Throwable e
       (println "Error:")
       (println e)))))
@@ -221,8 +220,8 @@
 
 (defn resolve [name & {:keys [recursive]
                        :or {recursive false}}]
-  (request "files/ls" :params {:arg name
-                               :recursive (if recursive "True" "False")}))
+  (request "resolve" :params {:arg name
+                              :recursive (if recursive "True" "False")}))
 
 
 (defn key-list []
@@ -274,17 +273,17 @@
 (defn dns [domain-name & {:keys [recursive]
                           :or {recursive false}}]
   (request "dns" :params {:arg domain-name
-                          :recusrive (if recursive "True" "False")}))
+                          :recursive (if recursive "True" "False")}))
 
 
 (defn pin-add [path & {:keys [recursive extra-paths]}]
   (request "pin/add" :params {:arg (concat [path] extra-paths)
-                              :recusrive (if recursive "True" "False")}))
+                              :recursive (if recursive "True" "False")}))
 
 
 (defn pin-rm [path & {:keys [recursive extra-paths]}]
   (request "pin/rm" :params {:arg (concat [path] extra-paths)
-                             :recusrive (if recursive "True" "False")}))
+                             :recursive (if recursive "True" "False")}))
 
 
 (defn pin-ls [& {:keys [type]
@@ -293,9 +292,9 @@
 
 
 (defn pin-update [from-path to-path & {:keys [unpin]}]
-  (request "pin/rm" :params (merge {:arg [from-path to-path]}
-                                   (if-not (nil? unpin)
-                                     {:unpin (if unpin "True" "False")}))))
+  (request "pin/update" :params (merge {:arg [from-path to-path]}
+                                       (when-not (nil? unpin)
+                                         {:unpin (if unpin "True" "False")}))))
 
 
 (defn pin-verify [path & {:keys [verbose extra-paths]}]

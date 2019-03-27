@@ -3,7 +3,8 @@
             [clojure.java.io :as io]
             [clojure.set :as set]
             [ipfs.client :as c]
-            [ipfs.test-utils :as test-utils])
+            [ipfs.test-utils :as test-utils]
+            [ipfs.base58 :as base58])
   (:import [java.util UUID]))
 
 (def readme-multihash "QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB")
@@ -97,3 +98,41 @@
                 :links first :name) "asdf"))
     (is (= [] (:links (c/object-get hash-after-link-rm))))
     (is (= (str new-data new-data) (:data (c/object-get hash-after-append-data))))))
+
+
+(deftest resolve-test
+  (is (:path (c/resolve "/ipns/ipfs.io")))
+  (is (:path (c/name-resolve "/ipns/ipfs.io"))))
+
+
+(deftest key-list-test
+  (let [new-key-name (str (UUID/randomUUID))
+        new-key-name2 (str (UUID/randomUUID))
+        new-key (c/key-gen new-key-name)
+        key-name->key (fn [key-name]
+                        (->> (c/key-list) :keys (filter #(= key-name (:name %))) first))]
+    (is (map? (key-name->key "self")))
+    (is (= (:name new-key) new-key-name))
+    (is (map? (key-name->key new-key-name)))
+    (c/key-rename new-key-name new-key-name2)
+    (is (map? (key-name->key new-key-name2)))
+    (is (nil? (key-name->key new-key-name)))
+    (c/key-rm new-key-name2)
+    (is (nil? (key-name->key new-key-name2)))))
+
+
+;; FIXME: This doesn't actually test the pin api as extensively as we would
+;; like because the objects created via `object-new` are added as direct
+;; pins
+(deftest pin-test
+  (let [{obj-hash :hash} (c/object-new)
+        {obj-hash2 :hash} (c/object-new)]
+    (c/pin-add obj-hash)
+    (is (contains? (:keys (c/pin-ls)) obj-hash))
+    (c/pin-rm obj-hash)
+    (is (not (contains? (:keys (c/pin-ls)) obj-hash)))
+    (c/pin-add obj-hash)
+    (is (contains? (:keys (c/pin-ls)) obj-hash))
+    ;; FIXME: why doesn't this remove the old pin?
+    (c/pin-update obj-hash obj-hash2)
+    (is (contains? (:keys (c/pin-ls)) obj-hash2))))
