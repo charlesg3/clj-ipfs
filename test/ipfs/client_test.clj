@@ -59,8 +59,41 @@
     (is (= (c/files-read file1-path) test-data))
     (is (= (c/files-read file2-path) test-data))
     (is (= 2 (count (:entries (c/files-ls random-dir)))))
+    (println (c/refs-local))
     (c/files-rm file1-path)
     (is (= 1 (count (:entries (c/files-ls random-dir)))))
     (c/files-mv file2-path file1-path)
     (is (= 1 (count (:entries (c/files-ls random-dir)))))
-    (is (= (:size (c/files-stat file1-path)) (count test-data)))))
+    (is (= (:size (c/files-stat file1-path)) (count test-data)))
+    (c/files-rm file1-path)
+    (is (= 0 (count (:entries (c/files-ls random-dir)))))))
+
+(deftest refs-test
+  (let [{block-key :key} (c/block-put "asdf")
+        all-refs (c/refs-local)
+        block-ref (->> all-refs
+                       (filter #(= (:ref %) block-key))
+                       (first))]
+    (is (map? block-ref))))
+
+(deftest bitswap-stat-test
+  (let [bitswap-stat (c/bitswap-stat)]
+    (is (vector? (:peers bitswap-stat)))
+    (is (number? (:blocks-received bitswap-stat)))
+    (is (number? (:blocks-sent bitswap-stat)))
+    (is (number? (:data-received bitswap-stat)))
+    (is (number? (:data-sent bitswap-stat)))))
+
+
+(deftest object-test
+  (let [{obj-hash :hash} (c/object-new)
+        new-data "new-data"
+        {hash-after-set-data :hash}    (c/object-patch-set-data obj-hash new-data)
+        {hash-after-link-add :hash}    (c/object-patch-add-link hash-after-set-data "asdf" obj-hash)
+        {hash-after-link-rm :hash}     (c/object-patch-rm-link hash-after-link-add "asdf")
+        {hash-after-append-data :hash} (c/object-patch-append-data hash-after-link-rm new-data)]
+    (is (= (:data (c/object-get hash-after-set-data)) new-data) )
+    (is (= (-> (c/object-get hash-after-link-add)
+                :links first :name) "asdf"))
+    (is (= [] (:links (c/object-get hash-after-link-rm))))
+    (is (= (str new-data new-data) (:data (c/object-get hash-after-append-data))))))

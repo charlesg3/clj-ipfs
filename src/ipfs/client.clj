@@ -170,7 +170,7 @@
   ([template]
    (if template
      (request (format "/object/new/%s" template))
-     (request "object/new/"))))
+     (request "object/new"))))
 
 
 (defn object-links [multihash]
@@ -192,7 +192,8 @@
 
 
 (defn object-patch-append-data [multihash new-data]
-  (request (format "object/patch/append-data/" multihash)
+  (request (format "object/patch/append-data")
+           :params {:arg multihash}
            :multipart [{:name ""
                         :content new-data}]
            :method :put))
