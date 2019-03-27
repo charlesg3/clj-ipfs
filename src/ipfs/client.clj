@@ -316,6 +316,95 @@
    (request (if peer (format "/id/%s" peer) (format "/id")))))
 
 
+(defn bootstrap-list
+  []
+  (request "bootstrap"))
+
+
+(def bootstrap bootstrap-list)
+
+
+(defn bootstrap-add [peer & peers]
+  (request "bootstrap/add" :params {:arg (concat [peer] peers)}))
+
+
+(defn bootstrap-rm [peer & peers]
+  (request "bootstrap/rm" :params {:arg (concat [peer] peers)}))
+
+
+(defn swarm-peers []
+  (request "swarm/peers"))
+
+
+(defn swarm-addrs []
+   (request "swarm/addrs"))
+
+
+(defn swarm-connect [address & addresses]
+   (request "swarm/connect" :params {:arg (concat [address] addresses)}))
+
+(defn swarm-disconnect [address & addresses]
+   (request "swarm/disconnect" :params {:arg (concat [address] addresses)}))
+
+
+(defn swarm-filters-add [address & addresses]
+   (request "swarm/filters/add" :params {:arg (concat [address] addresses)}))
+
+
+(defn swarm-filters-rm [address & addresses]
+   (request "swarm/filters/rm" :params {:arg (concat [address] addresses)}))
+
+
+(defn dht-query [peer-id & peer-ids]
+   (request "dht/query" :params {:arg (concat [peer-id] peer-ids)}))
+
+
+(defn dht-findprovs [multihash & multihashes]
+   (request "dht/findprovs" :params {:arg (concat [multihash] multihashes)}))
+
+
+(defn dht-findpeer [peer-id & peer-ids]
+   (request "dht/findpeer" :params {:arg (concat [peer-id] peer-ids)}))
+
+
+(defn dht-get [key & keys]
+   (request "dht/get" :params {:arg (concat [key] keys)}))
+
+
+(defn dht-put [key value]
+   (request "dht/put" :params {:arg (concat [key value])}))
+
+
+(defn ping [peer & peers]
+   (request "/ping" :params {:arg (concat [peer] peers)}))
+
+
+(defn config [key {:keys [value]
+                   :or {value nil}}]
+  (request "config" :params {:arg (concat [key]
+                                          (if value [value]))}))
+
+
+(defn config-show []
+   (request "config/show"))
+
+
+(defn config-replace [k v]
+   (request "/config/replace" :params {:arg [k v]}))
+
+
+(defn log-level [subsystem level]
+   (request "log/level" :params {:arg [subsystem level]}))
+
+
+(defn log-ls []
+   (request "log/ls"))
+
+
+(defn log-tail []
+   (request "log/tail"))
+
+
 (defn version []
   (request "version"))
 
@@ -375,24 +464,7 @@
            :params {:arg [source dest]}))
 
 
-
-
-
-(defn bootstrap-list
-  []
-  (request "/bootstrap"))
-
-
-(def bootstrap bootstrap-list)
-
-
-(defn bootstrap-add [peer & peers]
-  (request "/bootstrap/add" :params {:arg (concat [peer] peers)}))
-
-
-(defn bootstrap-rm [peer & peers]
-  (request "/bootstrap/rm" :params {:arg (concat [peer] peers)}))
-
-
+(defn shutdown []
+   (request "shutdown"))
 
 
