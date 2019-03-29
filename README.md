@@ -1,9 +1,26 @@
 # clj-ipfs
 Clojure client for IPFS 
 
-This project provides a simple Clojure client for IPFS. It is based off of the python client from here:
-- https://github.com/ipfs/py-ipfs-api
+This project provides a Clojure client for IPFS. It communicates with a node over HTTP using the API defined here: https://docs.ipfs.io/reference/api/http/
 
+## Example usage
+
+In the following repl example, we put a block in IPFS and then retrieve it.
+
+```.clj
+[ipfs.main] →  (require '[ipfs.client :as c])
+nil
+[ipfs.main] →  (c/block-put "asdf")
+{:key "QmeYzshSoNHr2QUWqmkMAy6raRhcmzTuroy7johWJNn3fY", :size 4}
+[ipfs.main] →  (c/block-get "QmeYzshSoNHr2QUWqmkMAy6raRhcmzTuroy7johWJNn3fY")
+"asdf"
+```
+
+## Current support
+
+Much of the api here has parity with the python client including the following apis: files, blocks, objects, refs, bitswap, keys, pin, bootstrap, swarm, dht, config, log
+
+There are some known missing pieces including support for `pubsub`.
 
 ## License
 
