@@ -20,7 +20,7 @@ nil
 
 Much of the api here has parity with the python client including the following apis: files, blocks, objects, refs, bitswap, keys, pin, bootstrap, swarm, dht, config, log
 
-There are some known missing pieces including support for `pubsub`.
+There are some known missing pieces including support for `pubsub`. Currently, this is by no means an exhaustive implementation, however it does provide some nice functionality and new functionality should be relatively easy to add.
 
 ## License
 
